@@ -54,22 +54,80 @@ Inductive bt_mirror : bt -> bt -> Prop :=
   | in_bt_mirror_1 : forall a b c d, a ⋈ b -> c ⋈ d -> ⟨a,c⟩ ⋈ ⟨d,b⟩
 where "x ⋈ y" := (bt_mirror x y).
 
-Definition bt_compute_mirror s : { t | s ⋈ t }.
-Proof.
-  induction s as [ | a (ma & Ha) b (mb & Hb) ].
-  exists ω; constructor.
-  exists ⟨mb,ma⟩; constructor; auto.
-Qed.
+Fixpoint btm t :=
+  match t with
+    | ω     => ω
+    | ⟨u,v⟩ => ⟨btm v,btm u⟩
+  end.
+
+Definition btm_spec s : s ⋈ btm s.
+Proof. induction s; constructor; auto. Qed.
 
 Reserved Notation "〈 t 〉" (at level 0, format "〈 t 〉", no associativity).
 
-Fixpoint bt_size t :=
+Fixpoint bts t :=
   match t with 
     | ω     => 1
     | ⟨s,t⟩ => 1 + 〈s〉 + 〈t〉
   end
-where "〈 t 〉" := (bt_size t).
+where "〈 t 〉" := (bts t).
 
 Fact bt_mirror_size s t : s ⋈ t -> 〈s〉 = 〈t〉.
 Proof. induction 1; simpl; lia. Qed.
+
+Reserved Notation " ⟦ x ⟧ " (at level 0). 
+
+Fixpoint bt_nat t :=
+  match t with 
+    | ω     => 0
+    | ⟨_,t⟩ => 1 + bt_nat t
+  end.
+
+Fixpoint nat_bt n := 
+  match n with
+    | 0   => ω
+    | S n => ⟨ω,⟦n⟧⟩
+  end
+where "⟦ x ⟧" := (nat_bt x).
+
+Fact nat_bt_nat n : bt_nat ⟦n⟧ = n.
+Proof.
+  induction n; simpl; f_equal; auto.
+Qed.
+
+Fixpoint bt_add u v :=
+  match u with 
+    | ω     => v
+    | ⟨_,u⟩ => ⟨ω,bt_add u v⟩
+  end.
+
+Fact bt_add_spec m n : bt_add ⟦n⟧ ⟦m⟧ = ⟦n+m⟧.
+Proof. induction n; simpl; f_equal; auto. Qed.
+
+Fixpoint bt_mul u v := 
+  match u with 
+    | ω     => ω
+    | ⟨_,u⟩ => bt_add v (bt_mul u v)
+  end.
+
+Fact bt_mul_spec m n : bt_mul ⟦n⟧ ⟦m⟧ = ⟦n*m⟧.
+Proof. 
+  induction n; simpl; f_equal; auto.
+  rewrite IHn, bt_add_spec; trivial.
+Qed.
+
+Fixpoint bt_size t :=
+  match t with 
+    | ω     => ⟨ω,ω⟩
+    | ⟨u,v⟩ => ⟨ω,bt_add (bt_size u) (bt_size v)⟩
+  end.
+
+Fact bt_size_spec t : bt_size t = ⟦〈t〉⟧.
+Proof.
+  induction t as [ | u Hu v Hv ]; simpl; f_equal; auto.
+  rewrite Hu, Hv, bt_add_spec; trivial.
+Qed.
+
+
+
 
