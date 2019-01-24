@@ -7,7 +7,7 @@
 (*         CeCILL v2 FREE SOFTWARE LICENSE AGREEMENT          *)
 (**************************************************************)
 
-Require Import Arith Lia.
+Require Import Arith Lia List.
 
 Set Implicit Arguments.
 
@@ -128,6 +128,61 @@ Proof.
   rewrite Hu, Hv, bt_add_spec; trivial.
 Qed.
 
+Fixpoint bt_app t a :=
+  match t with
+    | ω     => a
+    | ⟨u,v⟩ => ⟨u,bt_app v a⟩
+  end.
 
+Definition bt_roll t :=
+  match t with
+    | ω     => ω 
+    | ⟨a,b⟩ => bt_app b ⟨a,ω⟩
+  end.
+
+Fixpoint bt_list t :=
+  match t with
+    | ω     => nil
+    | ⟨u,v⟩ => u::bt_list v
+  end.
+
+Fixpoint list_bt l :=
+  match l with
+    | nil  => ω
+    | u::l => ⟨u,list_bt l⟩
+  end.
+
+Fact list_bt_cons a l : list_bt (a::l) = ⟨a,list_bt l⟩.
+Proof. trivial. Qed.
+
+Fact bt_list_bt l : bt_list (list_bt l) = l.
+Proof. induction l; simpl; f_equal; auto. Qed.
+
+Fact list_bt_list t : list_bt (bt_list t) = t.
+Proof. induction t; simpl; f_equal; auto. Qed.
+
+Fact bt_app_list l m : bt_app (list_bt l) (list_bt m) = list_bt (l++m).
+Proof. induction l; simpl; f_equal; auto. Qed.
+
+Fact bt_roll_list a l : bt_roll (list_bt (a::l)) = list_bt (l++a::nil).
+Proof.
+  unfold bt_roll; simpl.
+  rewrite <- bt_app_list; auto.
+Qed.
+
+Fixpoint bt_rev t :=
+  match t with
+    | ω     => ω
+    | ⟨a,b⟩ => bt_app (bt_rev b) ⟨a,ω⟩
+  end.
+
+Fact bt_rev_list l : bt_rev (list_bt l) = list_bt (rev l).
+Proof.
+  induction l; simpl; auto.
+  rewrite <- bt_app_list; f_equal; auto.
+Qed.
+
+
+ 
 
 
