@@ -7,7 +7,7 @@
 (*         CeCILL v2 FREE SOFTWARE LICENSE AGREEMENT          *)
 (**************************************************************)
 
-Require Import Arith Lia List.
+Require Import Arith Lia List Wf.
 
 Set Implicit Arguments.
 
@@ -116,6 +116,54 @@ Proof.
   rewrite IHn, bt_add_spec; trivial.
 Qed.
 
+Fixpoint fact n :=
+  match n with
+    | 0 => 1
+    | S n => S n * fact n
+  end.
+
+Fixpoint bt_fact u :=
+  match u with
+    | ω     => ⟨ω,ω⟩
+    | ⟨_,v⟩ => bt_mul u (bt_fact v)
+  end.
+
+Fact bt_fact_0 : bt_fact ⟦0⟧ = ⟦1⟧.
+Proof. auto. Qed.
+
+Fact bt_fact_S n : bt_fact ⟦S n⟧ = bt_mul ⟦S n⟧ (bt_fact ⟦n⟧).
+Proof. auto. Qed.
+
+Fact bt_fact_spec n : bt_fact ⟦n⟧ = ⟦fact n⟧.
+Proof.
+  induction n as [ | n IHn ].
+  + rewrite bt_fact_0; auto.
+  + rewrite bt_fact_S, IHn, bt_mul_spec; auto.
+Qed.
+
+Definition bt_bool t :=
+  match t with
+    | ω => false
+    | _ => true
+  end.
+
+Definition bool_bt (b : bool) := if b then ⟨ω,ω⟩ else ω.
+
+Fact bt_bool_bt b : bt_bool (bool_bt b) = b.
+Proof. destruct b; auto. Qed.
+
+Fixpoint bt_nat_le a b :=
+  match a, b with
+    | ω, _         => ⟨ω,ω⟩ 
+    | _, ω         => ω
+    | ⟨_,a⟩, ⟨_,b⟩ => bt_nat_le a b
+  end.
+
+Fact bt_nat_le_spec n m : bt_nat_le ⟦n⟧ ⟦m⟧ = bool_bt (leb n m).
+Proof.
+  revert m; induction n as [ | n IHn ]; [ intros m | intros [ | ] ]; simpl; auto.
+Qed.
+
 Fixpoint bt_size t :=
   match t with 
     | ω     => ⟨ω,ω⟩
@@ -183,6 +231,74 @@ Proof.
 Qed.
 
 
- 
+(* A positive binary number is a list 0..1....0 ending with a 1 *)
+
+Fixpoint bt_pos t :=
+  match t with
+    | ω     => 1
+    | ⟨ω,t⟩ => 2*bt_pos t
+    | ⟨_,t⟩ => 1+2*bt_pos t
+  end.
+
+Fixpoint div_mod_2 n : { q : nat & { b | n = b + 2*q /\ b < 2 } }.
+Proof.
+  destruct n as [ | [ | n ] ].
+  + exists 0, 0; simpl; lia.
+  + exists 0, 1; simpl; lia.
+  + destruct (div_mod_2 n) as (q & b & H1 & H2).
+    exists (S q), b; subst; simpl; lia.
+Qed.
+
+Definition pos_bt_full n : { t | bt_pos t = S n }.
+Proof.
+  induction n as [ n IHn ] using (well_founded_induction_type lt_wf).
+  destruct (div_mod_2 (S n)) as ([ | q ] & b & H1 & H2).
+  + destruct b as [ | [ | ] ].
+    - discriminate.
+    - exists ω; simpl; lia.
+    - exfalso; lia.
+  + destruct (IHn q) as (t & Ht); try lia.
+    destruct b as [ | b ].
+    - exists ⟨ω,t⟩; simpl; lia.
+    - exists ⟨⟨ω,ω⟩,t⟩; simpl; lia.
+Qed.
+
+Definition pos_bt n := 
+  match n with 0 => ω | S n => proj1_sig (pos_bt_full n) end.
+
+Fact pos_bt_spec n : bt_pos (pos_bt (S n)) = S n.
+Proof. apply (proj2_sig (pos_bt_full n)). Qed.
+
+Definition bt_add3 r s t :=
+  match r, s, t with
+    | ω,   ω,   ω   => ( ω, ω ) 
+    | _,   ω,   ω   => ( ω, ⟨ω,ω⟩ )
+    | ω,   _,   ω   => ( ω, ⟨ω,ω⟩ )
+    | _,   _,   ω   => ( ⟨ω,ω⟩, ω )
+    | ω,   ω,   _   => ( ω, ⟨ω,ω⟩ )
+    | _,   ω,   _   => ( ⟨ω,ω⟩, ω )
+    | ω,   _,   _   => ( ⟨ω,ω⟩, ω )
+    | _,   _,   _   => ( ⟨ω,ω⟩, ⟨ω,ω⟩ )
+  end.
+
+Fixpoint bt_pos_succ t :=
+  match t with
+    | ω     => ⟨ω,ω⟩
+    | ⟨ω,t⟩ => ⟨⟨ω,ω⟩,t⟩
+    | ⟨_,t⟩ => ⟨ω,bt_pos_succ t⟩
+  end.
+
+Fact bt_pos_succ_spec t : bt_pos (bt_pos_succ t) = S (bt_pos t).
+Proof.
+  induction t as [ | [|] _ t IHt ]; auto.
+  simpl; rewrite IHt; lia.
+Qed.
+
+Definition bt_pos_add_digit d t :=
+  match d with
+    | ω => t
+    | _ => bt_pos_succ t
+  end.
+
 
 
