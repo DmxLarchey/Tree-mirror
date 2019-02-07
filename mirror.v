@@ -96,13 +96,15 @@ Section bt_list.
 
   Fact fe_app_spec f e a b : f // e ~~> ⟨a,b⟩ -> CALL f_app ON f // e ~~> bt_app a b.
   Proof.
-    revert f e; induction a as [ | t _ a IHa ]; intros f e H.
+    revert f e.
+    induction a as [ | t _ a IHa ]; intros f e H.
     + constructor 7 with (1 := H).
       rewrite Hparam_app, Hbody_app; unfold fe_app.
       constructor 5 with ω b.
       { apply fs_var; rew env. }
       constructor 4.
       { apply fs_var; rew env. }
+      simpl.
       apply fs_var; rew env.
     + constructor 7 with (1 := H).
       rewrite Hparam_app, Hbody_app; unfold fe_app.
@@ -110,12 +112,15 @@ Section bt_list.
       { apply fs_var; rew env. }
       constructor 5 with t a.
       { apply fs_var; rew env. }
-      simpl; constructor 3.
+      simpl.
+      constructor 3.
       { apply fs_var; rew env. }
       apply IHa.
       constructor 3;
         apply fs_var; rew env.
   Qed.
+
+  Print fe_app_spec.
 
   Fact fe_roll_spec f e a : f // e ~~> a -> CALL f_roll ON f // e ~~> bt_roll a.
   Proof.

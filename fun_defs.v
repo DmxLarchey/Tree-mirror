@@ -79,7 +79,13 @@ Section fun_sem.
   where "f // e ~~> v" := (fun_sem f e v). 
 
   Fact fs_var x e a : e⇢x = a -> £x // e ~~> a.
-  Proof. intros []; constructor. Qed.
+  Proof. 
+    intros E.
+    rewrite <- E.
+    constructor 1.
+  Qed. 
+
+(* intros []; constructor. Qed. *)
 
   Fact fun_sem_var_inv x e a : £x // e ~~> a -> a = e⇢x.
   Proof. inversion 1; auto. Qed.
@@ -87,7 +93,8 @@ Section fun_sem.
   Fact fun_sem_null_inv e a : ø // e ~~> a -> a = ω.
   Proof. inversion 1; auto. Qed.
 
-  Fact fun_sem_pair_inv f g e v : f#g// e ~~> v -> exists a b, v = ⟨a,b⟩ /\ f // e ~~> a /\ g // e ~~> b.
+  Fact fun_sem_pair_inv f g e v : f#g // e ~~> v 
+                               -> exists a b, v = ⟨a,b⟩ /\ f // e ~~> a /\ g // e ~~> b.
   Proof. inversion 1; exists a, b; auto. Qed.
  
   Fact fun_sem_match_inv f u x y v e c :
