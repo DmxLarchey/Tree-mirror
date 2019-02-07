@@ -195,6 +195,12 @@ Fixpoint bt_app t a :=
     | ⟨u,v⟩ => ⟨u,bt_app v a⟩
   end.
 
+Fact bt_app_assoc l m k : bt_app l (bt_app m k) = bt_app (bt_app l m) k.
+Proof. induction l; simpl; f_equal; auto. Qed.
+
+Fact bt_app_nil l : bt_app l ω = l.
+Proof. induction l; simpl; f_equal; auto. Qed.
+
 Definition bt_roll t :=
   match t with
     | ω     => ω 
