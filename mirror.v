@@ -67,7 +67,7 @@ End mirror.
 Section bt_list.
 
   Variables (u x y z : Var) (Hxy : x <> y) (Hux : u <> x) (Huy : u <> y).
-  Variable (f_app f_roll f_rev : Fun).
+  Variable (f_app f_roll f_rev f_rev_aux : Fun).
 
   Definition fe_app := 
     MATCH £u WITH 
@@ -81,28 +81,40 @@ Section bt_list.
          ø⇒ø 
     OR x#y⇒CALL f_app ON (£y#(£x#ø)).
 
-  Definition fe_rev := 
+(*  Definition fe_rev := 
     MATCH £u WITH 
          ø⇒ø 
-    OR x#y⇒CALL f_app ON (CALL f_rev ON £y#(£x#ø)).
+    OR x#y⇒CALL f_app ON (CALL f_rev ON £y#(£x#ø)). *)
+
+  Definition fe_rev_aux :=
+    MATCH £u WITH
+         ø⇒ø 
+    OR u#x⇒MATCH £x WITH
+           ø⇒£u
+      OR y#x⇒CALL f_rev_aux ON ((£y#£u)#£x).
+
+  Definition fe_rev := CALL f_rev_aux ON (ø#£u).
 
   Variable (param : Fun -> Var)     
            (body : Fun -> fun_expr) 
            (Hparam_app : param f_app = u) (Hbody_app : body f_app = fe_app)
            (Hparam_roll : param f_roll = u) (Hbody_roll : body f_roll = fe_roll)
-           (Hparam_rev : param f_rev = u) (Hbody_rev : body f_rev = fe_rev).
+           (Hparam_rev : param f_rev = u) (Hbody_rev : body f_rev = fe_rev)
+           (Hparam_rev_aux : param f_rev_aux = u) (Hbody_rev_aux : body f_rev_aux = fe_rev_aux).
 
   Notation "f // s ~~> v" := (fun_sem param body f s v).
 
   Fact fe_app_spec f e a b : f // e ~~> ⟨a,b⟩ -> CALL f_app ON f // e ~~> bt_app a b.
   Proof.
-    revert f e; induction a as [ | t _ a IHa ]; intros f e H.
+    revert f e.
+    induction a as [ | t _ a IHa ]; intros f e H.
     + constructor 7 with (1 := H).
       rewrite Hparam_app, Hbody_app; unfold fe_app.
       constructor 5 with ω b.
       { apply fs_var; rew env. }
       constructor 4.
       { apply fs_var; rew env. }
+      simpl.
       apply fs_var; rew env.
     + constructor 7 with (1 := H).
       rewrite Hparam_app, Hbody_app; unfold fe_app.
@@ -110,7 +122,8 @@ Section bt_list.
       { apply fs_var; rew env. }
       constructor 5 with t a.
       { apply fs_var; rew env. }
-      simpl; constructor 3.
+      simpl.
+      constructor 3.
       { apply fs_var; rew env. }
       apply IHa.
       constructor 3;
@@ -137,6 +150,49 @@ Section bt_list.
       constructor 2.
   Qed.
 
+  Fact fe_rev_aux_spec f e a l : f // e ~~> ⟨a,l⟩ 
+                              -> CALL f_rev_aux ON f // e ~~> bt_app (bt_rev l) a.
+  Proof.
+    revert f e a. 
+    induction l as [ | b _ l IHl ]; intros f e a H.
+    + constructor 7 with (1 := H).
+      rewrite Hbody_rev_aux, Hparam_rev_aux; unfold fe_rev_aux.
+      constructor 5 with a ω.
+      * apply fs_var; rew env.
+      * constructor 4.
+        - apply fs_var; rew env.
+        - apply fs_var.
+          simpl.
+          rew env.
+    + constructor 7 with (1 := H).
+      rewrite Hbody_rev_aux, Hparam_rev_aux; unfold fe_rev_aux.
+      constructor 5 with a ⟨b,l⟩.
+      * apply fs_var; rew env.
+      * constructor 5 with b l.
+        - apply fs_var; rew env.
+        - replace (bt_app (bt_rev ⟨b,l⟩) a)
+          with    (bt_app (bt_rev l) ⟨b,a⟩).
+          apply IHl.
+          constructor 3.
+          constructor 3.
+          1,2,3: apply fs_var; rew env.
+          simpl.
+          rewrite <- bt_app_assoc; auto.
+  Qed.
+
+  Fact fe_rev_spec f e a : f // e ~~> a -> CALL f_rev ON f // e ~~> bt_rev a.
+  Proof.
+    intros H.
+    constructor 7 with a; auto.
+    rewrite Hparam_rev, Hbody_rev; unfold fe_rev.
+    rewrite <- bt_app_nil.
+    apply fe_rev_aux_spec.
+    constructor 3.
+    * constructor 2.
+    * apply fs_var; rew env.
+  Qed.
+
+(*
   Fact fe_rev_spec f e a : f // e ~~> a -> CALL f_rev ON f // e ~~> bt_rev a.
   Proof.
     revert f e; induction a as [ | t _ a IHa ]; intros f e H.
@@ -157,6 +213,7 @@ Section bt_list.
         { apply fs_var; rew env. }
         constructor 2.
   Qed.
+*)
 
 End bt_list.
 

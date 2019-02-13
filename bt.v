@@ -60,9 +60,22 @@ Fixpoint btm t :=
     | ⟨u,v⟩ => ⟨btm v,btm u⟩
   end.
 
-Definition btm_spec s : s ⋈ btm s.
-Proof. induction s; constructor; auto. Qed.
+Hint Constructors bt_mirror.
 
+Definition btm_spec s : s ⋈ btm s.
+Proof. 
+  induction s.
+  + simpl.
+    trivial.
+  + simpl.
+    constructor 2.
+    * assumption.
+    * assumption.
+Qed.
+
+Check btm_spec.
+Print btm_spec.
+ 
 Reserved Notation "〈 t 〉" (at level 0, format "〈 t 〉", no associativity).
 
 Fixpoint bts t :=
@@ -181,6 +194,12 @@ Fixpoint bt_app t a :=
     | ω     => a
     | ⟨u,v⟩ => ⟨u,bt_app v a⟩
   end.
+
+Fact bt_app_assoc l m k : bt_app l (bt_app m k) = bt_app (bt_app l m) k.
+Proof. induction l; simpl; f_equal; auto. Qed.
+
+Fact bt_app_nil l : bt_app l ω = l.
+Proof. induction l; simpl; f_equal; auto. Qed.
 
 Definition bt_roll t :=
   match t with
