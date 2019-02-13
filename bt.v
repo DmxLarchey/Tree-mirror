@@ -7,7 +7,7 @@
 (*         CeCILL v2 FREE SOFTWARE LICENSE AGREEMENT          *)
 (**************************************************************)
 
-Require Import Arith Lia List Wf.
+Require Import Arith Lia List Wf Permutation.
 
 Set Implicit Arguments.
 
@@ -230,6 +230,238 @@ Proof.
   rewrite <- bt_app_list; f_equal; auto.
 Qed.
 
+(* Comparison of binary trees 
+
+   bt_compare a b returns ω if a = b
+   bt_compare a b returns <ω,ω> if a < b
+   bt_compare a b returns <ω,<ω,ω>> if a > b
+
+*)
+
+Fixpoint bt_compare a b :=
+  match a, b with
+    | ω       , ω       => ω
+    | ω       , _       => ⟨ω,ω⟩
+    | ⟨_,_⟩   , ω       => ⟨ω,⟨ω,ω⟩⟩
+    | ⟨a1,a2⟩ , ⟨b1,b2⟩ => 
+      match bt_compare a1 b1 with
+        | ω => bt_compare a2 b2
+        | x => x
+      end
+  end.
+
+Fact bt_compare_3 a b : bt_compare a b = ω \/ bt_compare a b = ⟨ω,ω⟩ \/ bt_compare a b = ⟨ω,⟨ω,ω⟩⟩.
+Proof.
+  revert b; induction a as [ | a1 H1 a2 H2 ]; intros [ | b1 b2 ]; simpl; auto.
+  destruct (H1 b1) as [ E | [ E | E ] ]; rewrite E; auto.
+Qed.
+
+Fact bt_compare_eq a b : bt_compare a b = ω <-> a = b.
+Proof.
+  revert b; induction a as [ | a1 H1 a2 H2 ]; intros [ | b1 b2 ]; simpl; try tauto;
+    try (split; discriminate).
+  specialize (H1 b1); specialize (H2 b2).
+  split.
+  + destruct (bt_compare a1 b1); try discriminate.
+    rewrite H2, (proj1 H1); intros; subst; auto.
+  + inversion 1; subst.
+    rewrite (proj2 H1); tauto.
+Qed.
+
+Definition bt_3_opp a :=
+  match a with
+    | ω => ω 
+    | ⟨ω,ω⟩ => ⟨ω,⟨ω,ω⟩⟩
+    | _     => ⟨ω,ω⟩
+  end.
+
+Fact bt_compare_opp a b : bt_compare b a = bt_3_opp (bt_compare a b).
+Proof.
+  revert a; induction b as [ | b1 H1 b2 H2 ]; intros [ | a1 a2 ]; simpl; auto.
+  rewrite H1, H2.
+  destruct (bt_compare a1 b1) as [ | [ | [|] ] ]; simpl; auto.
+  destruct (bt_compare a2 b2) as [ | [ | [|] ] ]; simpl; auto.
+  all: destruct b3; auto.
+Qed.
+
+Definition bt_leq a b :=
+  match bt_compare a b with
+    | ω     => ⟨ω,ω⟩
+    | ⟨ω,ω⟩ => ⟨ω,ω⟩
+    | _     => ω 
+  end.
+
+Fixpoint bt_split l :=
+  match l with
+    | ω           => ⟨ω,ω⟩
+    | ⟨t,ω⟩       => ⟨⟨t,ω⟩,ω⟩
+    | ⟨t1,⟨t2,l⟩⟩ => 
+    match bt_split l with
+      | ω         => ⟨ω,ω⟩
+      | ⟨l1,l2⟩   => ⟨⟨t1,l1⟩,⟨t2,l2⟩⟩
+    end
+  end.
+
+Infix "~p" := (@Permutation _) (at level 70, no associativity).
+
+Fixpoint bt_split_spec l : exists l1 l2, l ~p l1 ++ l2 /\ bt_split (list_bt l) = ⟨list_bt l1,list_bt l2⟩.
+Proof.
+  destruct l as [ | t1 [ | t2 l ] ].
+  + exists nil, nil; simpl; auto.
+  + exists (t1::nil), nil; simpl; auto.
+  + destruct (bt_split_spec l) as (l1 & l2 & H1 & H2).
+    exists (t1::l1), (t2::l2); split.
+    * simpl; constructor 2.
+      apply Permutation_cons_app; auto.
+    * simpl; rewrite H2; auto.
+Qed.
+
+Fixpoint bt_length l :=
+  match l with
+    | ω     => 0
+    | ⟨_,l⟩ => S (bt_length l)
+  end.
+
+Fixpoint bt_split_length l : 
+   match bt_split l with
+     | ω       => False
+     | ⟨l1,l2⟩ => bt_length l1 + bt_length l2 = bt_length l
+               /\ bt_length l2 <= bt_length l1 <= 1+bt_length l2
+   end.
+Proof.
+  destruct l as [ | t1 [ | t2 l ] ]; simpl; auto.
+  specialize (bt_split_length l).
+  destruct (bt_split l) as [ | l1 l2 ]; simpl; try tauto; lia.
+Qed.
+
+Fixpoint bt_merge_rec n l m :=
+  match n with 
+    | 0   => ω
+    | S n => match l, m with 
+               | ω    , _       => m
+               | _    , ω       => l
+               | ⟨r,l'⟩, ⟨s,m'⟩ => match bt_leq r s with 
+                                     | ω => ⟨s,bt_merge_rec n l m'⟩
+                                     | _ => ⟨r,bt_merge_rec n l' m⟩
+                                   end
+             end
+  end.
+
+Fact bt_merge_rec_eq p q l m : bt_length l+bt_length m <= p 
+                           ->  bt_length l+bt_length m <= q 
+                           -> bt_merge_rec p l m = bt_merge_rec q l m.
+Proof.
+  revert q l m; induction p as [ | p IHp ]; intros q l m H1 H2.
+  1: destruct l; destruct m;simpl in H1; try lia;destruct q; simpl; auto.
+  destruct q as [ | q ].
+  1: destruct l; destruct m;simpl in H2; try lia; simpl; auto.
+  destruct l as [ | r l ]; simpl; auto.
+  destruct m as [ | s m ]; simpl; auto.
+  destruct (bt_leq r s) as [ | u v ]; 
+    f_equal; apply IHp; simpl in *; lia.
+Qed.
+
+Definition bt_merge l m := bt_merge_rec (bt_length l+bt_length m) l m.
+
+Fact bt_merge_spec_0 l : bt_merge l ω = l.
+Proof.
+  unfold bt_merge; destruct l; simpl; auto.
+Qed.
+
+Fact bt_merge_spec_1 m : bt_merge ω m = m.
+Proof.
+  unfold bt_merge; destruct m; simpl; auto.
+Qed.
+
+Fact bt_merge_spec_2 r l s m : 
+   bt_leq r s = ω -> bt_merge ⟨r,l⟩ ⟨s,m⟩ = ⟨s,bt_merge ⟨r,l⟩ m⟩.
+Proof.
+  intros H; unfold bt_merge.
+  simpl bt_merge_rec at 1.
+  rewrite H; f_equal.
+  apply bt_merge_rec_eq; simpl; lia.
+Qed.
+
+Fact bt_merge_spec_3 r l s m : 
+   bt_leq r s <> ω -> bt_merge ⟨r,l⟩ ⟨s,m⟩ = ⟨r,bt_merge l ⟨s,m⟩⟩.
+Proof.
+  intros H; unfold bt_merge.
+  simpl bt_merge_rec at 1.
+  destruct (bt_leq r s); auto.
+  1: destruct H; auto.
+Qed.
+
+Check bt_merge_spec_0.
+Check bt_merge_spec_1.
+Check bt_merge_spec_2.
+Check bt_merge_spec_3.
+
+Fixpoint bt_merge_sort_rec n l :=
+  match n with 
+    | 0 => ω
+    | S n => 
+    match l with
+      | ω     => ω
+      | ⟨_,ω⟩ => l
+      | _     => 
+      match bt_split l with
+        | ω     => ω
+        | ⟨l,m⟩ => bt_merge (bt_merge_sort_rec n l) (bt_merge_sort_rec n m)
+      end
+    end
+  end.
+
+Fact bt_merge_sort_rec_fix n l : bt_merge_sort_rec (S n) l = match l with
+      | ω     => ω
+      | ⟨_,ω⟩ => l
+      | _     => 
+      match bt_split l with
+        | ω     => ω
+        | ⟨l,m⟩ => bt_merge (bt_merge_sort_rec n l) (bt_merge_sort_rec n m)
+      end
+    end.
+Proof. auto. Qed.
+
+Fact bt_merge_sort_rec_eq p q l : bt_length l <= p -> bt_length l <= q -> bt_merge_sort_rec p l = bt_merge_sort_rec q l.
+Proof.
+  revert q l; induction p as [ | p IHp ]; intros q l H1 H2.
+  1: destruct l; simpl in *; try lia; destruct q; simpl; auto.
+  destruct q as [ | q ].
+  1: destruct l; simpl in *; try lia; auto.
+  simpl.
+  case_eq l; auto.
+  intros t [ | s l' ] H3; auto.
+  rewrite <- H3.
+  generalize (bt_split_length l); intros H.
+  subst l;simpl in H |- *.
+  destruct (bt_split l') as [ | l1 l2 ]; destruct H; try discriminate.
+  f_equal; apply IHp; simpl in *; lia.
+Qed.
+
+Definition bt_merge_sort l := bt_merge_sort_rec (bt_length l) l.
+
+Fact bt_merge_sort_spec_1 : bt_merge_sort ω = ω.
+Proof. auto. Qed.
+
+Fact bt_merge_sort_spec_2 t : bt_merge_sort ⟨t,ω⟩ = ⟨t,ω⟩.
+Proof. auto. Qed.
+
+Fact bt_merge_sort_spec_3 l : 2 <= bt_length l
+                           -> match bt_split l with
+                                | ω       => False
+                                | ⟨l1,l2⟩ => bt_merge_sort l = bt_merge (bt_merge_sort l1) (bt_merge_sort l2)
+                              end.
+Proof.
+  destruct l as [ | t1 [ | t2 l ] ]; try (simpl; lia).
+  intros _.
+  unfold bt_merge_sort at 1.
+  simpl bt_length.
+  rewrite bt_merge_sort_rec_fix.
+  generalize (bt_split_length ⟨t1,⟨t2,l⟩⟩).
+  destruct (bt_split ⟨t1,⟨t2,l⟩⟩) as [ | l1 l2 ]; auto.
+  intros [ G1 G2 ]; f_equal; apply bt_merge_sort_rec_eq; auto;
+    simpl in G1; lia.
+Qed.
 
 (* A positive binary number is a list 0..1....0 ending with a 1 *)
 
