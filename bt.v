@@ -7,9 +7,48 @@
 (*         CeCILL v2 FREE SOFTWARE LICENSE AGREEMENT          *)
 (**************************************************************)
 
-Require Import Arith Lia List Wf Permutation.
+Require Import Arith Lia List Wellfounded Permutation.
 
 Set Implicit Arguments.
+
+Section measure_rect.
+
+  Variables (X : Type) (m : X -> nat) (P : X -> Type)
+            (HP : forall x, (forall y, m y < m x -> P y) -> P x).
+
+  Theorem measure_rect : forall x, P x.
+  Proof.
+    apply (@well_founded_induction_type _ (fun x y => m x < m y)); auto.
+    apply wf_inverse_image, lt_wf.
+  Qed.
+
+End measure_rect.
+
+Tactic Notation "induction" "on" hyp(x) "as" ident(IH) "with" "measure" uconstr(f) :=
+  induction x as [ x IH ] using (@measure_rect _ (fun x => f)). 
+
+Section measure_rect2.
+
+  Variables (X Y : Type) (mes : X -> Y -> nat) (P : X -> Y -> Type)
+            (HP : forall x y, (forall x' y', mes x' y' < mes x y -> P x' y') -> P x y).
+
+  Let Q (c : X*Y) := P (fst c) (snd c).
+
+  Theorem measure_rect2 : forall x y, P x y.
+  Proof.
+    intros x y.
+    change (Q (x,y)).
+    generalize (x,y); clear x y; intros c.
+    induction on c as IHc with measure (mes (fst c) (snd c)).
+    destruct c as (x,y); simpl in *.
+    apply HP.
+    intros x' y'; simpl; apply (IHc (x',y')).
+  Qed. 
+
+End measure_rect2.
+
+Tactic Notation "induction" "on" hyp(x) hyp(y) "as" ident(IH) "with" "measure" uconstr(f) :=
+  pattern x, y; revert x y; apply (@measure_rect2 _ _ (fun x y => f)); intros x y IH.
 
 (** Binary trees *)
 
@@ -60,22 +99,9 @@ Fixpoint btm t :=
     | ⟨u,v⟩ => ⟨btm v,btm u⟩
   end.
 
-Hint Constructors bt_mirror.
-
 Definition btm_spec s : s ⋈ btm s.
-Proof. 
-  induction s.
-  + simpl.
-    trivial.
-  + simpl.
-    constructor 2.
-    * assumption.
-    * assumption.
-Qed.
+Proof. induction s; constructor; auto. Qed.
 
-Check btm_spec.
-Print btm_spec.
- 
 Reserved Notation "〈 t 〉" (at level 0, format "〈 t 〉", no associativity).
 
 Fixpoint bts t :=
@@ -194,12 +220,6 @@ Fixpoint bt_app t a :=
     | ω     => a
     | ⟨u,v⟩ => ⟨u,bt_app v a⟩
   end.
-
-Fact bt_app_assoc l m k : bt_app l (bt_app m k) = bt_app (bt_app l m) k.
-Proof. induction l; simpl; f_equal; auto. Qed.
-
-Fact bt_app_nil l : bt_app l ω = l.
-Proof. induction l; simpl; f_equal; auto. Qed.
 
 Definition bt_roll t :=
   match t with
@@ -353,67 +373,83 @@ Proof.
   destruct (bt_split l) as [ | l1 l2 ]; simpl; try tauto; lia.
 Qed.
 
-Fixpoint bt_merge_rec n l m :=
-  match n with 
-    | 0   => ω
-    | S n => match l, m with 
-               | ω    , _       => m
-               | _    , ω       => l
-               | ⟨r,l'⟩, ⟨s,m'⟩ => match bt_leq r s with 
-                                     | ω => ⟨s,bt_merge_rec n l m'⟩
-                                     | _ => ⟨r,bt_merge_rec n l' m⟩
-                                   end
-             end
-  end.
+Reserved Notation "x ⊕ y ⊳ z" (at level 70, no associativity).
 
-Fact bt_merge_rec_eq p q l m : bt_length l+bt_length m <= p 
-                           ->  bt_length l+bt_length m <= q 
-                           -> bt_merge_rec p l m = bt_merge_rec q l m.
+Inductive bt_merge_graph : bt -> bt -> bt -> Prop :=
+  | in_btmg_0 : forall m, ω ⊕ m ⊳ m
+  | in_btmg_1 : forall l, l ⊕ ω ⊳ l
+  | in_btmg_2 : forall r s l m p, bt_leq r s = ω  -> ⟨r,l⟩ ⊕ m ⊳ p -> ⟨r,l⟩ ⊕ ⟨s,m⟩ ⊳ ⟨s,p⟩
+  | in_btmg_3 : forall r s l m p, bt_leq r s <> ω -> l ⊕ ⟨s,m⟩ ⊳ p -> ⟨r,l⟩ ⊕ ⟨s,m⟩ ⊳ ⟨r,p⟩
+where "x ⊕ y ⊳ z" := (bt_merge_graph x y z).
+
+Fact bt_merge_graph_fun l m p1 p2 : l ⊕ m ⊳ p1 -> l ⊕ m ⊳ p2 -> p1 = p2.
 Proof.
-  revert q l m; induction p as [ | p IHp ]; intros q l m H1 H2.
-  1: destruct l; destruct m;simpl in H1; try lia;destruct q; simpl; auto.
-  destruct q as [ | q ].
-  1: destruct l; destruct m;simpl in H2; try lia; simpl; auto.
-  destruct l as [ | r l ]; simpl; auto.
-  destruct m as [ | s m ]; simpl; auto.
-  destruct (bt_leq r s) as [ | u v ]; 
-    f_equal; apply IHp; simpl in *; lia.
+  intros H; revert H p2.
+  induction 1; inversion 1; subst; auto.
+  + f_equal; auto.
+  + rewrite H in H7; destruct H7; auto.
+  + rewrite H7 in H; destruct H; auto.
+  + f_equal; auto.
 Qed.
 
-Definition bt_merge l m := bt_merge_rec (bt_length l+bt_length m) l m.
-
-Fact bt_merge_spec_0 l : bt_merge l ω = l.
+Definition bt_merge_full l m : { p | l ⊕ m ⊳ p }.
 Proof.
-  unfold bt_merge; destruct l; simpl; auto.
+  induction on l m as IH with measure (bt_length l+bt_length m).
+  case_eq l.
+  1: exists m; subst; constructor.
+  intros r l' El.
+  case_eq m.
+  1: exists l; subst; constructor.
+  intros s m' Em.
+  case_eq (bt_leq r s).
+  * intros E.
+    destruct (IH l m') as (p & Hp).
+    + subst; simpl; lia.
+    + exists ⟨s,p⟩; constructor 3; subst; auto.
+  * intros u v E.
+    destruct (IH l' m) as (p & Hp).
+    + subst; simpl; lia.
+    + exists ⟨r,p⟩; constructor 4; subst; auto.
+      rewrite E; discriminate.
 Qed.
+
+Definition bt_merge l m := proj1_sig (bt_merge_full l m).
+
+Fact bt_merge_spec l m : l ⊕ m ⊳ bt_merge l m.
+Proof. apply (proj2_sig _). Qed.
 
 Fact bt_merge_spec_1 m : bt_merge ω m = m.
 Proof.
-  unfold bt_merge; destruct m; simpl; auto.
+  apply bt_merge_graph_fun with (1 := bt_merge_spec _ _).
+  constructor.
 Qed.
 
-Fact bt_merge_spec_2 r l s m : 
-   bt_leq r s = ω -> bt_merge ⟨r,l⟩ ⟨s,m⟩ = ⟨s,bt_merge ⟨r,l⟩ m⟩.
+Fact bt_merge_spec_2 l : bt_merge l ω = l.
 Proof.
-  intros H; unfold bt_merge.
-  simpl bt_merge_rec at 1.
-  rewrite H; f_equal.
-  apply bt_merge_rec_eq; simpl; lia.
+  apply bt_merge_graph_fun with (1 := bt_merge_spec _ _).
+  constructor.
 Qed.
 
-Fact bt_merge_spec_3 r l s m : 
-   bt_leq r s <> ω -> bt_merge ⟨r,l⟩ ⟨s,m⟩ = ⟨r,bt_merge l ⟨s,m⟩⟩.
+Fact bt_merge_spec_3 r s l m : bt_leq r s = ω -> bt_merge ⟨r,l⟩ ⟨s,m⟩ = ⟨s,bt_merge ⟨r,l⟩ m⟩.
 Proof.
-  intros H; unfold bt_merge.
-  simpl bt_merge_rec at 1.
-  destruct (bt_leq r s); auto.
-  1: destruct H; auto.
+  intros E.
+  apply bt_merge_graph_fun with (1 := bt_merge_spec _ _).
+  constructor; auto.
+  apply bt_merge_spec.
 Qed.
 
-Check bt_merge_spec_0.
+Fact bt_merge_spec_4 r s l m : bt_leq r s <> ω -> bt_merge ⟨r,l⟩ ⟨s,m⟩ = ⟨r,bt_merge l ⟨s,m⟩⟩.
+Proof.
+  intros E.
+  apply bt_merge_graph_fun with (1 := bt_merge_spec _ _).
+  constructor; auto.
+  apply bt_merge_spec.
+Qed.
+
 Check bt_merge_spec_1.
 Check bt_merge_spec_2.
 Check bt_merge_spec_3.
+Check bt_merge_spec_4.
 
 Fixpoint bt_merge_sort_rec n l :=
   match n with 

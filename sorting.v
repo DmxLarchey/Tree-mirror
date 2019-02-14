@@ -16,45 +16,6 @@ Set Implicit Arguments.
 Local Notation "e ⇢ x" := (@get_env _ _ e x).
 Local Notation "e ⦃  x ⇠ v ⦄" := (@set_env _ _ Var_eq_dec e x v).
 
-Section measure_rect.
-
-  Variables (X : Type) (m : X -> nat) (P : X -> Type)
-            (HP : forall x, (forall y, m y < m x -> P y) -> P x).
-
-  Theorem measure_rect : forall x, P x.
-  Proof.
-    apply (@well_founded_induction_type _ (fun x y => m x < m y)); auto.
-    apply wf_inverse_image, lt_wf.
-  Qed.
-
-End measure_rect.
-
-Tactic Notation "induction" "on" hyp(x) "as" ident(IH) "with" "measure" uconstr(f) :=
-  induction x as [ x IH ] using (@measure_rect _ (fun x => f)). 
-
-Section measure_rect2.
-
-  Variables (X Y : Type) (m : X -> Y -> nat) (P : X -> Y -> Type)
-            (HP : forall x y, (forall x' y', m x' y' < m x y -> P x' y') -> P x y).
-
-  Let Q (c : X*Y) := P (fst c) (snd c).
-
-  Theorem measure_rect2 : forall x y, P x y.
-  Proof.
-    intros x y.
-    change (Q (x,y)).
-    generalize (x,y); clear x y; intros c.
-    induction on c as IHc with measure (m (fst c) (snd c)).
-    destruct c as (x,y); simpl in *.
-    apply HP.
-    intros x' y'; simpl; apply (IHc (x',y')).
-  Qed. 
-
-End measure_rect2.
-
-Tactic Notation "induction" "on" hyp(x) hyp(y) "as" ident(IH) "with" "measure" uconstr(f) :=
-  revert x y; apply measure_rect2 with (m := fun x y => f); intros x y IH.
-
 Section sorting.
 
   Variables (u x y z : Var) (Hxy : x <> y) (Hxz : x <> z) (Hyz : y <> z) (Hux : u <> x) (Huy : u <> y) (Huz : u <> z).
@@ -199,23 +160,9 @@ Section sorting.
         - constructor 3; constructor 3; apply fs_var; rew env.
   Qed.
 
-(*
-  Fixpoint bt_merge_rec n l m :=
-  match n with 
-    | 0   => ω
-    | S n => match l, m with 
-               | ω    , _       => m
-               | _    , ω       => l
-               | ⟨r,l'⟩, ⟨s,m'⟩ => match bt_leq r s with 
-                                     | ω => ⟨s,bt_merge_rec n l m'⟩
-                                     | _ => ⟨r,bt_merge_rec n l' m⟩
-                                   end
-             end
-  end.
-
-*)
-
-  Variable (v x1 y1 : Var).
+  Variable (v x1 y1 : Var) (Huv : u <> v) (Hxv : x <> v) (Hvx1 : v <> x1) (Hxy1 : x <> y1) (Hxx1 : x <> x1)
+                                          (Hux1 : u <> x1) (Hyy1 : y <> y1) (Huy1 : u <> y1) (Hx1y1 : x1 <> y1) (Hyx1 : x1 <> y)
+                                          (Hyv : v <> y) (Hvy1 : v <> y1).
 
   Definition fe_merge :=
      MATCH £u WITH
@@ -228,45 +175,56 @@ Section sorting.
                 ø   ⇒ £y#CALL p_merge ON (£u#£y1)
              OR u#u ⇒ £x#CALL p_merge ON (£x1#£v).
 
-  Hypothesis (Hparam_merge : param p_merge = u) (Hbody_merg : body p_merge = fe_merge).
+  Hypothesis (Hparam_merge : param p_merge = u) (Hbody_merge : body p_merge = fe_merge).
+
+  Fact fe_merge_spec_ind f e l m p : f // e ~~> ⟨l,m⟩ -> l ⊕ m ⊳ p -> CALL p_merge ON f // e ~~> p.
+  Proof.
+    intros H1 H2; revert H2 f e H1.
+    induction 1 as [ m | l | r s l m p H1 H2 IH2 | r s l m p H1 H2 IH2 ]; intros f e H;
+      constructor 7 with (1 := H);
+      rewrite Hbody_merge, Hparam_merge; unfold fe_merge.
+    + constructor 5 with ω m.
+      1: apply fs_var; rew env.
+      constructor 4; apply fs_var; rew env.
+    + constructor 5 with l ω.
+      1: apply fs_var; rew env.
+      destruct l as [ | a b ].
+      * constructor 4; apply fs_var; rew env.
+      * constructor 5 with a b.
+        1: apply fs_var; rew env.
+        constructor 4; apply fs_var; rew env.
+    + constructor 5 with ⟨r,l⟩ ⟨s,m⟩.
+      1: apply fs_var; rew env.
+      constructor 5 with r l.
+      1: apply fs_var; rew env.
+      constructor 5 with s m.
+      1: apply fs_var; rew env.
+      constructor 4.
+      1: rewrite <- H1; apply fe_leq_spec; constructor 3; apply fs_var; rew env.
+      constructor 3.
+      1: apply fs_var; rew env.
+      apply IH2.
+      constructor 3; apply fs_var; rew env.
+    + constructor 5 with ⟨r,l⟩ ⟨s,m⟩.
+      1: apply fs_var; rew env.
+      constructor 5 with r l.
+      1: apply fs_var; rew env.
+      constructor 5 with s m.
+      1: apply fs_var; rew env.
+      case_eq (bt_leq r s).
+      1: intro; destruct H1; auto.
+      intros a b E.
+      constructor 5 with a b.
+      1: rewrite <- E; apply fe_leq_spec; constructor 3; apply fs_var; rew env.
+      constructor 3.
+      1: apply fs_var; rew env.
+      apply IH2.
+      constructor 3; apply fs_var; rew env.
+  Qed.
 
   Fact fe_merge_spec f e l m : f // e ~~> ⟨l,m⟩ -> CALL p_merge ON f // e ~~> bt_merge l m.
   Proof.
-    revert l m.
-    Check measure_rect2.
-    apply measure_rect2 with (m := fun l m => bt_length l+bt_length m).
- induction on l m as IH with measure (bt_length l+bt_length m).
+    intros H; apply fe_merge_spec_ind with (1 := H), bt_merge_spec.
+  Qed.
 
-
-   
-    
-
-
-
-         OR x#x ⇒ ø#ø
-       OR u#x ⇒ MATCH £y WITH
-            ø   ⇒ ø#(ø#ø)
-
-
-           (Hparam_mul : param p_mul = u)
-           (Hparam_fact : param p_fact = u)
-           (Hparam_leb : param p_leb = u)
-           (Hparam_size : param p_size = u) 
-
-           (Hbody_add : body p_add = fe_add) 
-           (Hbody_mul : body p_mul = fe_mul)
-           (Hbody_fact : body p_fact = fe_fact)
-           (Hbody_leb : body p_leb = fe_leb)
-           (Hbody_size : body p_size = fe_size).
-
-
-  Fact f_cmp
-
-  Definition fe_add := 
-    MATCH £u WITH
-         ø   ⇒ ø 
-      OR x#z ⇒ 
-      MATCH £x WITH
-           ø   ⇒ £z 
-        OR x#y ⇒ ø#CALL p_add ON (£y#£z).
-
+End sorting.
