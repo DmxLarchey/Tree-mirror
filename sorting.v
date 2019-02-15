@@ -160,9 +160,11 @@ Section sorting.
         - constructor 3; constructor 3; apply fs_var; rew env.
   Qed.
 
-  Variable (v x1 y1 : Var) (Huv : u <> v) (Hxv : x <> v) (Hvx1 : v <> x1) (Hxy1 : x <> y1) (Hxx1 : x <> x1)
-                                          (Hux1 : u <> x1) (Hyy1 : y <> y1) (Huy1 : u <> y1) (Hx1y1 : x1 <> y1) (Hyx1 : x1 <> y)
-                                          (Hyv : v <> y) (Hvy1 : v <> y1).
+  Variable (v x1 y1 : Var) 
+           (Huv : u <> v)   (Hxv : x <> v)   (Hvx1 : v <> x1) 
+           (Hxy1 : x <> y1) (Hxx1 : x <> x1) (Hux1 : u <> x1) 
+           (Hyy1 : y <> y1) (Huy1 : u <> y1) (Hx1y1 : x1 <> y1) 
+           (Hyx1 : x1 <> y) (Hyv : v <> y)   (Hvy1 : v <> y1).
 
   Definition fe_merge :=
      MATCH £u WITH
