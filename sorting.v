@@ -20,7 +20,7 @@ Section sorting.
 
   Variables (u x y z : Var) (Hxy : x <> y) (Hxz : x <> z) (Hyz : y <> z) (Hux : u <> x) (Huy : u <> y) (Huz : u <> z).
 
-  Variable (p_split p_merge p_merge_sort p_cmp p_leq : Fun).
+  Variable (p_split p_merge p_merge_sort p_cmp p_leq p_msort : Fun).
 
   Variable (param : Fun -> Var)     
            (body : Fun -> fun_expr).
@@ -228,5 +228,49 @@ Section sorting.
   Proof.
     intros H; apply fe_merge_spec_ind with (1 := H), bt_merge_spec.
   Qed.
+
+  Definition fe_msort :=
+    MATCH £u WITH
+        ø   ⇒ ø
+     OR x#v ⇒ MATCH £v WITH
+          ø   ⇒ £u
+       OR x#x ⇒ MATCH CALL p_split ON £u WITH
+            ø   ⇒ ø
+         OR x#y ⇒ CALL p_merge ON (CALL p_msort ON £x#CALL p_msort ON £y).
+
+  Hypothesis (Hparam_msort : param p_msort = u) (Hbody_msort : body p_msort = fe_msort).
+
+  Fact fe_msort_spec_ind f e l p : f // e ~~> l -> l ⋗ p -> CALL p_msort ON f // e ~~> p.
+  Proof.
+    intros H1 H2; revert H2 f e H1.
+    induction 1 as [ | t | l l1 l2 m1 m2 p H1 H2 H3 IH3 H4 IH4 H5 ]; intros f e H;
+      constructor 7 with (1 := H);
+      rewrite Hbody_msort, Hparam_msort; unfold fe_msort.
+    + constructor 4.
+      1: apply fs_var; rew env.
+      constructor 2.
+    + constructor 5 with t ω.
+      1: apply fs_var; rew env.
+      constructor 4; apply fs_var; rew env.
+    + case_eq l.
+      1: { intros ?; subst l; simpl in H1; lia. }
+      intros t1 [ | t2 m ] E.
+      1: { subst l; simpl in H1; lia. }
+      constructor 5 with t1 ⟨t2,m⟩.
+      1: apply fs_var; rew env.
+      constructor 5 with t2 m.
+      1: apply fs_var; rew env.
+      rewrite <- E.
+      constructor 5 with l1 l2.
+      * rewrite <- H2; apply fe_split_spec.
+        apply fs_var; rew env.
+      * apply fe_merge_spec_ind with m1 m2; auto.
+        - constructor 3. 
+          ++ apply IH3, fs_var; rew env.
+          ++ apply IH4, fs_var; rew env.
+  Qed.
+
+  Fact fe_msort_spec f e l : f // e ~~> l -> CALL p_msort ON f // e ~~> bt_msort l.
+  Proof. intros H; apply fe_msort_spec_ind with (1 := H), bt_msort_spec. Qed.
 
 End sorting.

@@ -7,7 +7,7 @@
 (*         CeCILL v2 FREE SOFTWARE LICENSE AGREEMENT          *)
 (**************************************************************)
 
-Require Import Arith Lia List Wellfounded Permutation.
+Require Import Arith Lia List Wellfounded Permutation Extraction.
 
 Set Implicit Arguments.
 
@@ -451,71 +451,84 @@ Check bt_merge_spec_2.
 Check bt_merge_spec_3.
 Check bt_merge_spec_4.
 
-Fixpoint bt_merge_sort_rec n l :=
-  match n with 
-    | 0 => ω
-    | S n => 
-    match l with
-      | ω     => ω
-      | ⟨_,ω⟩ => l
-      | _     => 
-      match bt_split l with
-        | ω     => ω
-        | ⟨l,m⟩ => bt_merge (bt_merge_sort_rec n l) (bt_merge_sort_rec n m)
-      end
-    end
-  end.
+Reserved Notation "x ⋗ y" (at level 70, no associativity).
 
-Fact bt_merge_sort_rec_fix n l : bt_merge_sort_rec (S n) l = match l with
-      | ω     => ω
-      | ⟨_,ω⟩ => l
-      | _     => 
-      match bt_split l with
-        | ω     => ω
-        | ⟨l,m⟩ => bt_merge (bt_merge_sort_rec n l) (bt_merge_sort_rec n m)
-      end
-    end.
-Proof. auto. Qed.
+Inductive bt_msort_graph : bt -> bt -> Prop :=
+  | in_btmsg_0 : ω ⋗ ω
+  | in_btmsg_1 : forall t, ⟨t,ω⟩ ⋗ ⟨t,ω⟩
+  | in_btmsg_2 : forall l l1 l2 m1 m2 p, 2 <= bt_length l 
+                              -> bt_split l = ⟨l1,l2⟩
+                              -> l1 ⋗ m1
+                              -> l2 ⋗ m2
+                              -> m1 ⊕ m2 ⊳ p
+                              -> l ⋗ p
+where "x ⋗ y" := (bt_msort_graph x y).
 
-Fact bt_merge_sort_rec_eq p q l : bt_length l <= p -> bt_length l <= q -> bt_merge_sort_rec p l = bt_merge_sort_rec q l.
+Fact bt_msort_fun l p1 p2 : l ⋗ p1 -> l ⋗ p2 -> p1 = p2.
 Proof.
-  revert q l; induction p as [ | p IHp ]; intros q l H1 H2.
-  1: destruct l; simpl in *; try lia; destruct q; simpl; auto.
-  destruct q as [ | q ].
-  1: destruct l; simpl in *; try lia; auto.
-  simpl.
-  case_eq l; auto.
-  intros t [ | s l' ] H3; auto.
-  rewrite <- H3.
-  generalize (bt_split_length l); intros H.
-  subst l;simpl in H |- *.
-  destruct (bt_split l') as [ | l1 l2 ]; destruct H; try discriminate.
-  f_equal; apply IHp; simpl in *; lia.
+  intros H1; revert H1 p2.
+  induction 1; inversion 1; subst; auto; simpl in *; try lia.
+  rewrite H0 in H4; inversion H4; subst l3 l4.
+  apply IHbt_msort_graph1 in H5.
+  apply IHbt_msort_graph2 in H6.
+  subst m0 m3.
+  revert H1 H7; apply bt_merge_graph_fun.
 Qed.
 
-Definition bt_merge_sort l := bt_merge_sort_rec (bt_length l) l.
-
-Fact bt_merge_sort_spec_1 : bt_merge_sort ω = ω.
-Proof. auto. Qed.
-
-Fact bt_merge_sort_spec_2 t : bt_merge_sort ⟨t,ω⟩ = ⟨t,ω⟩.
-Proof. auto. Qed.
-
-Fact bt_merge_sort_spec_3 l : 2 <= bt_length l
-                           -> match bt_split l with
-                                | ω       => False
-                                | ⟨l1,l2⟩ => bt_merge_sort l = bt_merge (bt_merge_sort l1) (bt_merge_sort l2)
-                              end.
+Fact bt_msort_full l : { p | l ⋗ p }.
 Proof.
-  destruct l as [ | t1 [ | t2 l ] ]; try (simpl; lia).
-  intros _.
-  unfold bt_merge_sort at 1.
-  simpl bt_length.
-  rewrite bt_merge_sort_rec_fix.
-  generalize (bt_split_length ⟨t1,⟨t2,l⟩⟩).
-  destruct (bt_split ⟨t1,⟨t2,l⟩⟩) as [ | l1 l2 ]; auto.
-  intros [ G1 G2 ]; f_equal; apply bt_merge_sort_rec_eq; auto;
-    simpl in G1; lia.
+  induction on l as IHl with measure (bt_length l).
+  case_eq l.
+  1: { intros E; exists l; subst; constructor. }
+  intros t1 [ | t2 m ] E.
+  1: { exists l; subst; constructor. }
+  generalize (bt_split_length l).
+  case_eq (bt_split l).
+  1: tauto.
+  intros l1 l2 H1 (H2 & H3).
+  destruct (IHl l1) as (m1 & H4).
+  1: { subst l; simpl in *; lia. }
+  destruct (IHl l2) as (m2 & H5).
+  1: { subst l; simpl in *; lia. }
+  destruct (bt_merge_full m1 m2) as (p & H6).
+  exists p.
+  rewrite <- E.
+  constructor 3 with l1 l2 m1 m2; auto.
+  subst; simpl; lia.
+Qed.
+
+Definition bt_msort l := proj1_sig (bt_msort_full l).
+
+Fact bt_msort_spec l : l ⋗ bt_msort l.
+Proof. apply (proj2_sig _). Qed.
+
+Fact bt_msort_spec_1 : bt_msort ω = ω.
+Proof.
+  apply bt_msort_fun with (1 := bt_msort_spec _).
+  constructor.
+Qed.
+
+Fact bt_msort_spec_2 t : bt_msort ⟨t,ω⟩ = ⟨t,ω⟩.
+Proof.
+  apply bt_msort_fun with (1 := bt_msort_spec _).
+  constructor.
+Qed.
+
+Fact bt_msort_spec_3 l : 
+         2 <= bt_length l 
+      -> match bt_split l with
+           | ω       => False
+           | ⟨l1,l2⟩ => bt_msort l = bt_merge (bt_msort l1) (bt_msort l2)
+         end.
+Proof.
+  intros H.
+  generalize (bt_split_length l).
+  case_eq (bt_split l); auto.
+  intros l1 l2 E _.
+  apply bt_msort_fun with (1 := bt_msort_spec _).
+  constructor 3 with l1 l2 (bt_msort l1) (bt_msort l2); auto;
+    try apply bt_msort_spec.
+  apply bt_merge_spec.
 Qed.
 
 (* A positive binary number is a list 0..1....0 ending with a 1 *)
