@@ -18,7 +18,7 @@ Local Notation "e ⦃  x ⇠ v ⦄" := (@set_env _ _ Var_eq_dec e x v).
 
 Section mirror.
 
-  Variables (u x y z : Var) (Hxy : x <> y).
+  Variables (u x y z : Var) (Hxy : x <> y) (Hux : x <> u) (Huy : y <> u).
   Variable (p : Fun).
 
   Definition fe_mirror := MATCH £u WITH ø⇒ø OR x#y⇒CALL p ON £y#CALL p ON £x.
@@ -61,6 +61,43 @@ Section mirror.
 
   Theorem fe_mirror_spec e : CALL p ON £z // e ~~> btm (e⇢z).
   Proof. apply fe_mirror_halt; constructor. Qed.
+
+  Reserved Notation "x // t ▹ y" (at level 70, no associativity).
+
+  Inductive bt_subst (t : bt) : bt -> bt -> Prop :=
+    | in_bts_0 : ω // t ▹ t
+    | in_bts_1 : forall a a' b b', a // t ▹ a' -> b // t ▹ b' -> ⟨a,b⟩ // t ▹ ⟨a',b'⟩
+  where "x // t ▹ y" := (bt_subst t x y).
+
+  Variable (f_subst : Fun).
+
+  Definition fe_subst := 
+    MATCH £u WITH 
+         ø   ⇒ ø 
+      OR x#u ⇒ MATCH £x WITH
+           ø   ⇒ £u 
+        OR x#y ⇒ (CALL f_subst ON (£x#£u)#CALL f_subst ON (£y#£u)).
+
+  Variables (param_subst : param f_subst = u) 
+            (body_subst  : body f_subst = fe_subst).
+
+  Fact fe_subst_spec f e a t a' : a // t ▹ a' -> f // e ~~> ⟨a,t⟩ 
+                                              -> CALL f_subst ON f // e ~~> a'.
+  Proof.
+    intros H1; revert H1 f e.
+    induction 1 as [ | a a' b b' H1 IH1 H2 IH2 ]; intros f e H;
+      constructor 7 with (1 := H); rewrite param_subst, body_subst; unfold fe_subst.
+    + constructor 5 with ω t.
+      1: apply fs_var; rew env.
+      constructor 4; apply fs_var; rew env.
+    + constructor 5 with ⟨a,b⟩ t.
+      1: apply fs_var; rew env.
+      constructor 5 with a b.
+      1: apply fs_var; rew env.
+      constructor 3.
+      * apply IH1; constructor 3; apply fs_var; rew env.
+      * apply IH2; constructor 3; apply fs_var; rew env.
+  Qed.
 
 End mirror.
 
